@@ -21,7 +21,6 @@ type
     class operator Explicit(a: BigData): Double;
     class operator Explicit(a: String): BigData;
   End;
-//haha
 implementation
 uses Generics.Collections, System.SysUtils, Math;
 
