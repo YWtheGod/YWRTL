@@ -41,7 +41,7 @@ var C : TRttiContext;
     A : TCustomAttribute;
     N : integer;
 begin
-  SetLength(Result,0);
+  SetLength(Result,20);
   N := 0;
   C := TRttiContext.Create;
   try

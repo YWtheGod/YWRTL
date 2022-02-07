@@ -5,12 +5,12 @@ uses classes, SysUtils, RTLConsts, Generics.Collections, Generics.Defaults;
 type
   TModDictionary<TKey,TValue,TItem> = class abstract(TEnumerable<TPair<TKey,TValue>>)
   private
-    type
+  type
     TItemArray = array of TItem;
-    private
+  var
     FItems: TItemArray;
     FCount: Integer;
-      FComparer: IEqualityComparer<TKey>;
+    FComparer: IEqualityComparer<TKey>;
     FGrowThreshold: Integer;
 
     function ToArrayImpl(Count: Integer): TArray<TPair<TKey,TValue>>;
@@ -20,13 +20,11 @@ type
     function GetBucketIndex(const Key: TKey; HashCode: Integer): Integer;
     function GetItem(const Key: TKey): TValue;
     procedure SetItem(const Key: TKey; const Value: TValue);
-    procedure RehashAdd(var I : TItem);
+    procedure RehashAdd(HashCode: Integer; const Key: TKey; const Value: TValue);
     procedure DoAdd(HashCode, Index: Integer; const Key: TKey; const Value: TValue);
+    procedure DoSetValue(Index: Integer; const Value: TValue);
+    function DoRemove(const Key: TKey; HashCode: Integer; Notification: TCollectionNotification): TValue;
   protected
-    function DoRemove(const Key: TKey; HashCode: Integer; Notification: TCollectionNotification): TValue; virtual;
-    function DoGetValue(Index: Integer):TValue; virtual;
-    procedure DoSetValue(Index: Integer; const Value: TValue); virtual;
-    function Hash(const Key: TKey): Integer; virtual;
     function DoGetEnumerator: TEnumerator<TPair<TKey,TValue>>; override;
     procedure KeyNotify(const Key: TKey; Action: TCollectionNotification); virtual;
     procedure ValueNotify(const Value: TValue; Action: TCollectionNotification); virtual;
@@ -36,6 +34,7 @@ type
     function GetKeyFromItem(var I : TItem):TKey; virtual; abstract;
     procedure SetValueForItem(var I : TItem; H : TValue); virtual; abstract;
     function GetValueFromItem(var I : TItem):TValue; virtual; abstract;
+    function Hash(const Key: TKey): Integer; virtual;
   public
     constructor Create(ACapacity: Integer = 0); overload;
     constructor Create(const AComparer: IEqualityComparer<TKey>); overload;
@@ -51,6 +50,7 @@ type
     procedure TrimExcess;
     function TryGetValue(const Key: TKey; out Value: TValue): Boolean;
     procedure AddOrSetValue(const Key: TKey; const Value: TValue);
+    function TryAdd(const Key: TKey; const Value: TValue): Boolean;
     function ContainsKey(const Key: TKey): Boolean;
     function ContainsValue(const Value: TValue): Boolean;
     function ToArray: TArray<TPair<TKey,TValue>>; override; final;
@@ -140,24 +140,9 @@ type
     function GetEnumerator: TPairEnumerator; reintroduce;
     property Keys: TKeyCollection read GetKeys;
     property Values: TValueCollection read GetValues;
+    property Comparer: IEqualityComparer<TKey> read FComparer;
     property OnKeyNotify: TCollectionNotifyEvent<TKey> read FOnKeyNotify write FOnKeyNotify;
     property OnValueNotify: TCollectionNotifyEvent<TValue> read FOnValueNotify write FOnValueNotify;
-  end;
-
-  _TItem<TKey,TValue>=record
-    HashCode:integer;
-    Key : TKey;
-    Value : TValue;
-  end;
-
-  TYWDictionary<TKey,TValue>=class(TModDictionary<TKey,TValue,_TItem<TKey,TValue>>)
-  protected
-    procedure SetHashCodeForItem(var I : _TItem<TKey,TValue>; H : integer); override;
-    function GetHashCodeFromItem(var I : _TItem<TKey,TValue>):integer; override;
-    procedure SetKeyForItem(var I : _TItem<TKey,TValue>; H : TKey); override;
-    function GetKeyFromItem(var I : _TItem<TKey,TValue>):TKey; override;
-    procedure SetValueForItem(var I : _TItem<TKey,TValue>; H : TValue); override;
-    function GetValueFromItem(var I : _TItem<TKey,TValue>):TValue; override;
   end;
 
   _TGUIDItem<TValue> = record
@@ -222,7 +207,8 @@ begin
 
   for i := 0 to Length(oldItems) - 1 do
     if GetHashCodeFromItem(oldItems[i]) <> EMPTY_HASH then
-      RehashAdd(oldItems[i]);
+      RehashAdd(GetHashCodeFromItem(oldItems[i]), GetKeyFromItem(oldItems[i]),
+        GetValueFromItem(oldItems[i]));
 end;
 
 procedure TModDictionary<TKey,TValue,TItem>.SetCapacity(ACapacity: Integer);
@@ -230,7 +216,7 @@ var
   newCap: Integer;
 begin
   if ACapacity < Count then
-    raise EArgumentOutOfRangeException.CreateRes(@SArgumentOutOfRange);
+    ErrorArgumentOutOfRange;
 
   if ACapacity = 0 then
     Rehash(0)
@@ -257,6 +243,9 @@ function TModDictionary<TKey,TValue,TItem>.GetBucketIndex(const Key: TKey; HashC
 var
   start, hc: Integer;
 begin
+  if Length(FItems) = 0 then
+    Exit(not High(Integer));
+
   start := HashCode and (Length(FItems) - 1);
   Result := start;
   while True do
@@ -294,26 +283,33 @@ begin
   index := GetBucketIndex(Key, Hash(Key));
   if index < 0 then
     raise EListError.CreateRes(@SGenericItemNotFound);
-  Result := DoGetValue(index);
+  Result := GetValueFromItem(FItems[index]);
 end;
 
 procedure TModDictionary<TKey,TValue,TItem>.SetItem(const Key: TKey; const Value: TValue);
 var
   index: Integer;
+  oldValue: TValue;
 begin
   index := GetBucketIndex(Key, Hash(Key));
   if index < 0 then
     raise EListError.CreateRes(@SGenericItemNotFound);
 
-  DoSetValue(index,Value);
+  oldValue := GetValueFromItem(FItems[index]);
+  SetValueForItem(FItems[index],Value);
+
+  ValueNotify(oldValue, cnRemoved);
+  ValueNotify(Value, cnAdded);
 end;
 
-procedure TModDictionary<TKey,TValue,TItem>.RehashAdd(var I : TItem);
+procedure TModDictionary<TKey,TValue,TItem>.RehashAdd(HashCode: Integer; const Key: TKey; const Value: TValue);
 var
   index: Integer;
 begin
-  index := not GetBucketIndex(GetKeyFromItem(I), GetHashCodeFromItem(I));
-  FItems[index] := I;
+  index := not GetBucketIndex(Key, HashCode);
+  SetHashCodeForItem(FItems[index],HashCode);
+  SetKeyForItem(FItems[index],Key);
+  SetValueForItem(FItems[index],Value);
 end;
 
 procedure TModDictionary<TKey,TValue,TItem>.KeyNotify(const Key: TKey; Action: TCollectionNotification);
@@ -344,11 +340,10 @@ var
 begin
   inherited Create;
   if ACapacity < 0 then
-    raise EArgumentOutOfRangeException.CreateRes(@SArgumentOutOfRange);
+    ErrorArgumentOutOfRange;
   FComparer := AComparer;
   if FComparer = nil then
     FComparer := TEqualityComparer<TKey>.Default;
-  if ACapacity<4 then Acapacity := 4;
   SetCapacity(ACapacity);
 end;
 
@@ -383,6 +378,9 @@ procedure TModDictionary<TKey,TValue,TItem>.Add(const Key: TKey; const Value: TV
 var
   index, hc: Integer;
 begin
+  if Count >= FGrowThreshold then
+    Grow;
+
   hc := Hash(Key);
   index := GetBucketIndex(Key, hc);
   if index >= 0 then
@@ -495,7 +493,7 @@ begin
   end;
 end;
 
-function TModDictionary<TKey, TValue, TItem>.ToArray: TArray<TPair<TKey,TValue>>;
+function TModDictionary<TKey, TValue,TItem>.ToArray: TArray<TPair<TKey,TValue>>;
 begin
   Result := ToArrayImpl(Count);
 end;
@@ -537,25 +535,19 @@ procedure TModDictionary<TKey,TValue,TItem>.DoAdd(HashCode, Index: Integer; cons
 begin
   SetHashCodeForItem(FItems[Index],HashCode);
   SetKeyForItem(FItems[Index],Key);
-  DoSetValue(index,Value);
+  SetValueForItem(FItems[Index],Value);
   Inc(FCount);
-  if FCount >= FGrowThreshold then
-    Grow;
+
   KeyNotify(Key, cnAdded);
   ValueNotify(Value, cnAdded);
 end;
 
-function TModDictionary<TKey, TValue, TItem>.DoGetEnumerator: TEnumerator<TPair<TKey, TValue>>;
+function TModDictionary<TKey, TValue,TItem>.DoGetEnumerator: TEnumerator<TPair<TKey, TValue>>;
 begin
   Result := GetEnumerator;
 end;
 
-function TModDictionary<TKey, TValue, TItem>.DoGetValue(Index: Integer): TValue;
-begin
-  Result := GetValueFromItem(FItems[Index]);
-end;
-
-procedure TModDictionary<TKey,TValue, TItem>.DoSetValue(Index: Integer; const Value: TValue);
+procedure TModDictionary<TKey,TValue,TItem>.DoSetValue(Index: Integer; const Value: TValue);
 var
   oldValue: TValue;
 begin
@@ -576,7 +568,37 @@ begin
   if index >= 0 then
     DoSetValue(index, Value)
   else
+  begin
+    // We only grow if we are inserting a new value.
+    if Count >= FGrowThreshold then
+    begin
+      Grow;
+      // We need a new Bucket Index because the array has grown.
+      index := GetBucketIndex(Key, hc);
+    end;
     DoAdd(hc, not index, Key, Value);
+  end;
+end;
+
+function TModDictionary<TKey,TValue,TItem>.TryAdd(const Key: TKey; const Value: TValue): Boolean;
+var
+  hc: Integer;
+  index: Integer;
+begin
+  hc := Hash(Key);
+  index := GetBucketIndex(Key, hc);
+  Result := index < 0;
+  if Result then
+  begin
+    // We only grow if we are inserting a new value.
+    if Count >= FGrowThreshold then
+    begin
+      Grow;
+      // We need a new Bucket Index because the array has grown.
+      index := GetBucketIndex(Key, hc);
+    end;
+    DoAdd(hc, not index, Key, Value);
+  end;
 end;
 
 function TModDictionary<TKey,TValue,TItem>.ContainsKey(const Key: TKey): Boolean;
@@ -592,7 +614,8 @@ begin
   c := TEqualityComparer<TValue>.Default;
 
   for i := 0 to Length(FItems) - 1 do
-    if (GetHashCodeFromItem(FItems[i]) <> EMPTY_HASH) and c.Equals(GetValueFromItem(FItems[i]), Value) then
+    if (GetHashCodeFromItem(FItems[i]) <> EMPTY_HASH) and
+      c.Equals(GetValueFromItem(FItems[i]), Value) then
       Exit(True);
   Result := False;
 end;
@@ -618,7 +641,8 @@ end;
 
 // Pairs
 
-constructor TModDictionary<TKey,TValue,TItem>.TPairEnumerator.Create(const ADictionary: TModDictionary<TKey,TValue,TItem>);
+constructor TModDictionary<TKey,TValue,TItem>.TPairEnumerator.Create(
+  const ADictionary: TModDictionary<TKey,TValue,TItem>);
 begin
   inherited Create;
   FIndex := -1;
@@ -630,7 +654,7 @@ begin
   Result := GetCurrent;
 end;
 
-function TModDictionary<TKey, TValue, TItem>.TPairEnumerator.DoMoveNext: Boolean;
+function TModDictionary<TKey, TValue,TItem>.TPairEnumerator.DoMoveNext: Boolean;
 begin
   Result := MoveNext;
 end;
@@ -654,19 +678,20 @@ end;
 
 // Keys
 
-constructor TModDictionary<TKey,TValue,TItem>.TKeyEnumerator.Create(const ADictionary: TModDictionary<TKey,TValue,TItem>);
+constructor TModDictionary<TKey,TValue,TItem>.TKeyEnumerator.Create(
+  const ADictionary: TModDictionary<TKey,TValue,TItem>);
 begin
   inherited Create;
   FIndex := -1;
   FDictionary := ADictionary;
 end;
 
-function TModDictionary<TKey, TValue, TItem>.TKeyEnumerator.DoGetCurrent: TKey;
+function TModDictionary<TKey, TValue,TItem>.TKeyEnumerator.DoGetCurrent: TKey;
 begin
   Result := GetCurrent;
 end;
 
-function TModDictionary<TKey, TValue, TItem>.TKeyEnumerator.DoMoveNext: Boolean;
+function TModDictionary<TKey, TValue,TItem>.TKeyEnumerator.DoMoveNext: Boolean;
 begin
   Result := MoveNext;
 end;
@@ -689,19 +714,20 @@ end;
 
 // Values
 
-constructor TModDictionary<TKey,TValue,TItem>.TValueEnumerator.Create(const ADictionary: TModDictionary<TKey,TValue,TItem>);
+constructor TModDictionary<TKey,TValue,TItem>.TValueEnumerator.Create(
+  const ADictionary: TModDictionary<TKey,TValue,TItem>);
 begin
   inherited Create;
   FIndex := -1;
   FDictionary := ADictionary;
 end;
 
-function TModDictionary<TKey, TValue, TItem>.TValueEnumerator.DoGetCurrent: TValue;
+function TModDictionary<TKey, TValue,TItem>.TValueEnumerator.DoGetCurrent: TValue;
 begin
   Result := GetCurrent;
 end;
 
-function TModDictionary<TKey, TValue, TItem>.TValueEnumerator.DoMoveNext: Boolean;
+function TModDictionary<TKey, TValue,TItem>.TValueEnumerator.DoMoveNext: Boolean;
 begin
   Result := MoveNext;
 end;
@@ -720,131 +746,6 @@ begin
       Exit(True);
   end;
   Result := False;
-end;
-
-{ TDictionary<TKey, TValue>.TValueCollection }
-
-constructor TModDictionary<TKey, TValue, TItem>.TValueCollection.Create(const ADictionary: TModDictionary<TKey, TValue, TItem>);
-begin
-  inherited Create;
-  FDictionary := ADictionary;
-end;
-
-function TModDictionary<TKey, TValue, TItem>.TValueCollection.DoGetEnumerator: TEnumerator<TValue>;
-begin
-  Result := GetEnumerator;
-end;
-
-function TModDictionary<TKey, TValue, TItem>.TValueCollection.GetCount: Integer;
-begin
-  Result := FDictionary.Count;
-end;
-
-function TModDictionary<TKey, TValue, TItem>.TValueCollection.GetEnumerator: TValueEnumerator;
-begin
-  Result := TValueEnumerator.Create(FDictionary);
-end;
-
-function TModDictionary<TKey, TValue, TItem>.TValueCollection.ToArray: TArray<TValue>;
-begin
-  Result := ToArrayImpl(FDictionary.Count);
-end;
-
-function TModDictionary<TKey, TValue, TItem>.TValueCollection.ToArrayImpl(
-  Count: Integer): TArray<TValue>;
-var
-  Value: TValue;
-begin
-  // We assume our caller has passed correct Count
-  SetLength(Result, Count);
-  Count := 0;
-  for Value in Self do
-  begin
-    Result[Count] := Value;
-    Inc(Count);
-  end;
-end;
-
-{ TDictionary<TKey, TValue>.TKeyCollection }
-
-constructor TModDictionary<TKey, TValue, TItem>.TKeyCollection.Create(
-  const ADictionary: TModDictionary<TKey, TValue, TItem>);
-begin
-  inherited Create;
-  FDictionary := ADictionary;
-end;
-
-function TModDictionary<TKey, TValue, TItem>.TKeyCollection.DoGetEnumerator: TEnumerator<TKey>;
-begin
-  Result := GetEnumerator;
-end;
-
-function TModDictionary<TKey, TValue, TItem>.TKeyCollection.GetCount: Integer;
-begin
-  Result := FDictionary.Count;
-end;
-
-function TModDictionary<TKey, TValue, TItem>.TKeyCollection.GetEnumerator: TKeyEnumerator;
-begin
-  Result := TKeyEnumerator.Create(FDictionary);
-end;
-
-function TModDictionary<TKey, TValue, TItem>.TKeyCollection.ToArray: TArray<TKey>;
-begin
-  Result := ToArrayImpl(FDictionary.Count);
-end;
-
-function TModDictionary<TKey, TValue, TItem>.TKeyCollection.ToArrayImpl(
-  Count: Integer): TArray<TKey>;
-var
-  Value: TKey;
-begin
-  // We assume our caller has passed correct Count
-  SetLength(Result, Count);
-  Count := 0;
-  for Value in Self do
-  begin
-    Result[Count] := Value;
-    Inc(Count);
-  end;
-end;
-
-{ TYWDictionary<TKey, TValue> }
-
-function TYWDictionary<TKey, TValue>.GetHashCodeFromItem(
-  var I: _TItem<TKey, TValue>): integer;
-begin
-  Result := I.HashCode;
-end;
-
-function TYWDictionary<TKey, TValue>.GetKeyFromItem(
-  var I: _TItem<TKey, TValue>): TKey;
-begin
-  Result := I.Key;
-end;
-
-function TYWDictionary<TKey, TValue>.GetValueFromItem(
-  var I: _TItem<TKey, TValue>): TValue;
-begin
-  Result := I.Value;
-end;
-
-procedure TYWDictionary<TKey, TValue>.SetHashCodeForItem(
-  var I: _TItem<TKey, TValue>; H: integer);
-begin
-  I.HashCode := H;
-end;
-
-procedure TYWDictionary<TKey, TValue>.SetKeyForItem(var I: _TItem<TKey, TValue>;
-  H: TKey);
-begin
-  I.Key := H;
-end;
-
-procedure TYWDictionary<TKey, TValue>.SetValueForItem(
-  var I: _TItem<TKey, TValue>; H: TValue);
-begin
-  I.Value := H;
 end;
 
 { TGUIDDictionary<TValue> }
@@ -932,6 +833,94 @@ end;
 function TGUIDedObjDictionary<TValue>.Hash(const Key: TGUID): Integer;
 begin
   Result := Key.D1;
+end;
+
+{ TModDictionary<TKey, TValue, TItem>.TValueCollection }
+
+constructor TModDictionary<TKey, TValue, TItem>.TValueCollection.Create(
+  const ADictionary: TModDictionary<TKey, TValue, TItem>);
+begin
+  inherited Create;
+  FDictionary := ADictionary;
+end;
+
+function TModDictionary<TKey, TValue, TItem>.TValueCollection.DoGetEnumerator: TEnumerator<TValue>;
+begin
+  Result := GetEnumerator;
+end;
+
+function TModDictionary<TKey, TValue, TItem>.TValueCollection.GetCount: Integer;
+begin
+  Result := FDictionary.Count;
+end;
+
+function TModDictionary<TKey, TValue, TItem>.TValueCollection.GetEnumerator: TValueEnumerator;
+begin
+  Result := TValueEnumerator.Create(FDictionary);
+end;
+
+function TModDictionary<TKey, TValue, TItem>.TValueCollection.ToArray: TArray<TValue>;
+begin
+  Result := ToArrayImpl(FDictionary.Count);
+end;
+
+function TModDictionary<TKey, TValue, TItem>.TValueCollection.ToArrayImpl(
+  Count: Integer): TArray<TValue>;
+var
+  Value: TValue;
+begin
+  // We assume our caller has passed correct Count
+  SetLength(Result, Count);
+  Count := 0;
+  for Value in Self do
+  begin
+    Result[Count] := Value;
+    Inc(Count);
+  end;
+end;
+
+{ TModDictionary<TKey, TValue, TItem>.TKeyCollection }
+
+constructor TModDictionary<TKey, TValue, TItem>.TKeyCollection.Create(
+  const ADictionary: TModDictionary<TKey, TValue, TItem>);
+begin
+  inherited Create;
+  FDictionary := ADictionary;
+end;
+
+function TModDictionary<TKey, TValue, TItem>.TKeyCollection.DoGetEnumerator: TEnumerator<TKey>;
+begin
+  Result := GetEnumerator;
+end;
+
+function TModDictionary<TKey, TValue, TItem>.TKeyCollection.GetCount: Integer;
+begin
+  Result := FDictionary.Count;
+end;
+
+function TModDictionary<TKey, TValue, TItem>.TKeyCollection.GetEnumerator: TKeyEnumerator;
+begin
+  Result := TKeyEnumerator.Create(FDictionary);
+end;
+
+function TModDictionary<TKey, TValue, TItem>.TKeyCollection.ToArray: TArray<TKey>;
+begin
+  Result := ToArrayImpl(FDictionary.Count);
+end;
+
+function TModDictionary<TKey, TValue, TItem>.TKeyCollection.ToArrayImpl(
+  Count: Integer): TArray<TKey>;
+var
+  Value: TKey;
+begin
+  // We assume our caller has passed correct Count
+  SetLength(Result, Count);
+  Count := 0;
+  for Value in Self do
+  begin
+    Result[Count] := Value;
+    Inc(Count);
+  end;
 end;
 
 end.

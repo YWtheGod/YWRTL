@@ -30,15 +30,13 @@ resourcestring
   StrBadNumberFormat = 'Bad Number Format';
 
 function Div64_9(var a :UInt64):Cardinal; inline;
-{$IFNDEF CPU64BITS}
-var d : Cardinal;
-    c : Uint64;
-{$ENDIF}
 begin
 {$IFDEF CPU64BITS}
   Result := a div 1000000000;
   a := a-Result*1000000000;
 {$ELSE}
+  var d : Cardinal;
+  var c : Uint64;
   Result := 0;
   c := 1000000000 shl 29;
   d := 1 shl 29;
@@ -54,15 +52,13 @@ begin
 end;
 
 function Div64_2(var a :UInt64):Cardinal; inline;
-{$IFNDEF CPU64BITS}
-var d : Cardinal;
-    c : Uint64;
-{$ENDIF}
 begin
 {$IFDEF CPU64BITS}
   Result := a div 1000000000000000000;
   a := a-Result*1000000000000000000;
 {$ELSE}
+  var d : Cardinal;
+  var c : Uint64;
   Result := 0;
   c := UInt64(1000000000000000000) shl 4;
   d := 1 shl 4;
@@ -78,19 +74,17 @@ begin
 end;
 
 function Div64_1(var a :UInt64):Cardinal; inline;
-{$IFNDEF CPU64BITS}
-var d : Cardinal;
-    c : Uint64;
-{$ENDIF}
 begin
 {$IFDEF CPU64BITS}
-  Result := a div 1000000000000000000;
-  a := a-Result*1000000000000000000;
+  Result := a div 1000000000;
+  a := a-Result*1000000000;
 {$ELSE}
+  var d : Cardinal;
+  var c : Uint64;
   Result := 0;
-  c := 1000000000000000000 shl 3;
+  c := UInt64(1000000000) shl 3;
   d := 1 shl 3;
-  while a>=1000000000000000000 do begin
+  while a>=1000000000 do begin
     if a>=c then begin
       a := a-c;
       Result := Result+d;
@@ -123,55 +117,68 @@ begin
     SetLength(Result.DATA,1);
     Result.Power := 1;
     Result.DATA[0] := a;
-  end else begin
+  end else if a<1000000000000000000 then begin
     b := Div64_9(a);
-    if a<1000000000 then begin
-      SetLength(Result.DATA,2);
-      Result.Power := 2;
-      Result.DATA[0] := b;
-      Result.DATA[1] := a;
-    end else begin
-      c := Div64_2(b);
-      SetLength(Result.DATA,3);
-      Result.Power := 3;
-      Result.DATA[0] := c;
-      Result.DATA[1] := b;
-      Result.DATA[2] := a;
-    end;
+    SetLength(Result.DATA,2);
+    Result.Power := 2;
+    Result.DATA[0] := b;
+    Result.DATA[1] := a;
+  end else begin
+    c := Div64_2(a);
+    b := Div64_9(a);
+    SetLength(Result.DATA,3);
+    Result.Power := 3;
+    Result.DATA[0] := c;
+    Result.DATA[1] := b;
+    Result.DATA[2] := a;
   end;
 end;
 
 class operator BigData.Explicit(a: String): BigData;
 var c : char;
-    e,ep,dp,i,j : integer;
+    e,ep,dp,i,j,st,ed : integer;
 begin
   a := a.Replace(',','');
   a := UpperCase(a);
+  st := 0;
   if a.Chars[0]='-' then begin
     Result.Positive := -1;
-    a := a.Remove(0,1);
+    st := 1;
   end else begin
     Result.Positive := 1;
-    if a.Chars[0]='+' then a := a.Remove(0,1);
+    if a.Chars[0]='+' then st := 1;
   end;
+  ed := a.Length;
   ep := a.IndexOf('E');
   if ep>-1 then begin
     if not TryStrToInt(a.Substring(ep+1),e) then
       raise Exception.Create(StrBadNumberFormat);
-    a := a.Remove(ep);
+    ed := ep;
   end else e := 0;
-  dp := a.IndexOf('.');
-  if dp=-1 then dp := a.Length;
-  for j := 0 to dp-1 do
+  while (st<ed)and(a.Chars[st]='0') do inc(st);
+  if st=ed then begin
+    Result.Positive := 0;
+    exit;
+  end;
+  dp := a.IndexOf('.',st);
+  if dp=-1 then dp := ed;
+  for j := st to dp-1 do
     if not(a.Chars[j] in ['0'..'9']) then
       raise Exception.Create(StrBadNumberFormat);
-  for j := dp+1 to a.Length-1 do
+  while (dp<ed-1)and(a.Chars[ed-1]='0') do dec(ed);
+  if dp=ed-1 then ed := dp;
+  if st=ed then begin
+    Result.Positive := 0;
+    exit;
+  end;
+  for j := dp+1 to ed-1 do
     if not(a.Chars[j] in ['0'..'9']) then
       raise Exception.Create(StrBadNumberFormat);
-  a := a.Remove(dp,1);
-  if a.Length=0 then raise Exception.Create(StrBadNumberFormat);
-  Result.Power := floor(e / 9)+1;
-  dp := dp+e-(Result.Power-1)*9;
+  if st=dp then while (st<ed)and(a.Chars[st+1]='0') do inc(st);
+  e := e+dp-st-1;
+  if e<0 then Result.Power := (e+1) div 9 -1
+  else Result.Power := e div 9;
+  dp := st+1+e-Result.Power*9;
   if dp<0 then begin
     a := a.PadLeft(a.Length-dp,'0');
     dp := 0;
@@ -213,7 +220,7 @@ end;
 
 class constructor BigData.InitBigData;
 begin
-  DefaultPrec := 2000;
+  DefaultPrec := 4;
 end;
 
 function BigData.ToString: String;

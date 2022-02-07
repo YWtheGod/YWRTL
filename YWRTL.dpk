@@ -34,12 +34,10 @@ contains
   YWRTLUtils in 'YWRTLUtils.pas',
   YWEvents in 'YWEvents.pas',
   DMPools in 'DMPools.pas',
-  ThreadJobs in 'ThreadJobs.pas',
-  YWDictionarys in 'YWDictionarys.pas',
-  uGeoInfo in 'uGeoInfo.pas',
   FrameHelper in 'FrameHelper.pas',
-  BigDataUtils in 'BigDataUtils.pas',
-  UniARC in 'UniARC.pas';
+  BufferPool in 'BufferPool.pas',
+  FastIntToStr in 'FastIntToStr.pas',
+  YWTypes in 'YWTypes.pas';
 
 end.
 
