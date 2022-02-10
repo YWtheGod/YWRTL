@@ -1,4 +1,4 @@
-unit FastIntToStr;
+﻿unit FastIntToStr;
 
 interface
 uses SysUtils;

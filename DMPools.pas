@@ -61,6 +61,7 @@ type
   end;
 
 implementation
+uses Threading;
 
 {%CLASSGROUP 'System.Classes.TPersistent'}
 
@@ -118,7 +119,6 @@ end;
 
 procedure TDataModuleHelper.AfterGet;
 begin
-  TDMHolder(Owner).AllocateTime := Now;
 end;
 
 procedure TDataModuleHelper.BeforeReturn;
@@ -170,22 +170,26 @@ end;
 class function TDMHolder<T>.GetFromPool: TDMHolder;
 begin
   Result := TDMHolder(Pool.Get);
+  while (Result<>nil)and(Result.AllocateTime<DestroyTime) do begin
+    Result.Free;
+    Result := TDMHolder(Pool.Get);
+  end;
 end;
 
 class procedure TDMHolder<T>.Return(D: TDMHolder);
-var r : boolean;
-    a : TDMHolder;
 begin
-  r := D.AllocateTime<DestroyTime;
   if D.DestroyPool then begin
-    a := TDMHolder(Pool.Get);
-    while a<>nil do begin
-      a.Free;
-      a := TDMHolder(Pool.Get);
-    end;
     DestroyTime := Now;
-  end;
-  if r or (not Pool.Put(D)) then D.Free;
+    D.Free;
+    TTask.Run(procedure begin
+      var a := TDMHolder(Pool.Get);
+      while (a<>nil)and(a.AllocateTime<DestroyTime) do begin
+        a.Free;
+        a := TDMHolder(Pool.Get);
+      end;
+      if (a<>nil)and(not Pool.Put(a)) then a.Free;
+    end);
+  end else if (D.AllocateTime<DestroyTime) or (not Pool.Put(D)) then D.Free;
 end;
 
 procedure TDMHolder<T>.ReturnToPool;
@@ -204,6 +208,7 @@ end;
 constructor TDMHolder.Create;
 begin
   inherited Create(nil);
+  AllocateTime := Now;
 end;
 
 class procedure TDMHolder.RegisterClass;
