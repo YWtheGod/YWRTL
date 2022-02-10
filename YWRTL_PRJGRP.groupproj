@@ -1,0 +1,48 @@
+﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <ProjectGuid>{06EF70EA-D2FD-4D8A-BCCA-F5A97DB7D490}</ProjectGuid>
+    </PropertyGroup>
+    <ItemGroup>
+        <Projects Include="YWRTL.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="Example\TestYWRTL.dproj">
+            <Dependencies/>
+        </Projects>
+    </ItemGroup>
+    <ProjectExtensions>
+        <Borland.Personality>Default.Personality.12</Borland.Personality>
+        <Borland.ProjectType/>
+        <BorlandProject>
+            <Default.Personality/>
+        </BorlandProject>
+    </ProjectExtensions>
+    <Target Name="YWRTL">
+        <MSBuild Projects="YWRTL.dproj"/>
+    </Target>
+    <Target Name="YWRTL:Clean">
+        <MSBuild Projects="YWRTL.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="YWRTL:Make">
+        <MSBuild Projects="YWRTL.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="TestYWRTL">
+        <MSBuild Projects="Example\TestYWRTL.dproj"/>
+    </Target>
+    <Target Name="TestYWRTL:Clean">
+        <MSBuild Projects="Example\TestYWRTL.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="TestYWRTL:Make">
+        <MSBuild Projects="Example\TestYWRTL.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Build">
+        <CallTarget Targets="YWRTL;TestYWRTL"/>
+    </Target>
+    <Target Name="Clean">
+        <CallTarget Targets="YWRTL:Clean;TestYWRTL:Clean"/>
+    </Target>
+    <Target Name="Make">
+        <CallTarget Targets="YWRTL:Make;TestYWRTL:Make"/>
+    </Target>
+    <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
+</Project>
