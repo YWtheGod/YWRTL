@@ -20,23 +20,6 @@ type
   __T15 = array[0..14] of byte;
   __T16 = array[0..15] of byte;
 
-  TBufferPool<T>=record
-  const BufferSize = ord(sizeof(T)<=4)*(1 shl (11+sizeof(T)));
-  class var
-    buf : Pointer;
-  class function GetBuffer : Pointer; static; inline;
-  class procedure FreeBuffer(var B : Pointer); static; inline;
-  class constructor Create;
-  class destructor Destroy;
-  end;
-
-  BufferPool4k = TBufferPool<__T1>;
-  BufferPool16k = TBufferPool<__T3>;
-  BufferPool64k = TBufferPool<__T5>;
-  BufferPool128k = TBufferPool<__T6>;
-  BufferPool1M = TBufferPool<__T9>;
-  BufferPool4M = TBufferPool<__T11>;
-
   TRingQueue<T> = record
   const
     QueueSize = (1 shl sizeof(T)*3)*8-1;
@@ -482,31 +465,6 @@ end;
 class operator WR<T>.Positive(a: WR<T>): T;
 begin
   Result := a.O;
-end;
-
-{ TBufferPool<T> }
-
-class constructor TBufferPool<T>.Create;
-begin
-  buf := nil;
-end;
-
-class destructor TBufferPool<T>.Destroy;
-begin
-  if Buf<>nil then Freemem(Buf);
-end;
-
-class procedure TBufferPool<T>.FreeBuffer(var B: Pointer);
-begin
-  AtomicExchange(b,buf);
-  if b<>nil then Freemem(b);
-end;
-
-class function TBufferPool<T>.GetBuffer: Pointer;
-begin
-  Result := nil;
-  AtomicExchange(Result,buf);
-  if Result=nil then Getmem(Result,buffersize);
 end;
 
 end.

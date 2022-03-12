@@ -6,7 +6,7 @@
         <FrameworkType>None</FrameworkType>
         <Base>True</Base>
         <Config Condition="'$(Config)'==''">Release</Config>
-        <Platform Condition="'$(Platform)'==''">Win64</Platform>
+        <Platform Condition="'$(Platform)'==''">Win32</Platform>
         <TargetedPlatforms>32915</TargetedPlatforms>
         <AppType>Package</AppType>
     </PropertyGroup>
@@ -137,7 +137,6 @@
         <DCCReference Include="YWEvents.pas"/>
         <DCCReference Include="DMPools.pas"/>
         <DCCReference Include="FrameHelper.pas"/>
-        <DCCReference Include="BufferPool.pas"/>
         <DCCReference Include="FastIntToStr.pas"/>
         <DCCReference Include="YWTypes.pas"/>
         <BuildConfiguration Include="Base">

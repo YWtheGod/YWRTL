@@ -35,7 +35,6 @@ contains
   YWEvents in 'YWEvents.pas',
   DMPools in 'DMPools.pas',
   FrameHelper in 'FrameHelper.pas',
-  BufferPool in 'BufferPool.pas',
   FastIntToStr in 'FastIntToStr.pas',
   YWTypes in 'YWTypes.pas';
 
