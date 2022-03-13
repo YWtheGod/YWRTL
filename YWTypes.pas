@@ -21,7 +21,7 @@ type
   __T16 = array[0..15] of byte;
 
   TBufferPool<T>=record
-  const BufferSize = ord(sizeof(T)<=4)*(1 shl (11+sizeof(T)));
+  const BufferSize = 1 shl (11+sizeof(T));
   class var
     buf : Pointer;
   class function GetBuffer : Pointer; static; inline;
