@@ -1,4 +1,4 @@
-﻿unit FastIntToStr;
+﻿unit YWSTRUTIL;
 
 interface
 uses SysUtils;
@@ -2732,7 +2732,7 @@ begin
 end;
 
 function IntToHex2(Value: UInt8): string; inline; overload;
-begin Result := FastIntToStr.IntToHex2(Int8(Value)); end;
+begin Result := IntToHex2(Int8(Value)); end;
 
 function IntToHex2(Value: Int16): string; overload;
 begin
@@ -2741,7 +2741,7 @@ begin
 end;
 
 function IntToHex2(Value: UInt16): string; overload;
-begin Result := FastIntToStr.IntToHex2(Int16(Value)); end;
+begin Result := IntToHex2(Int16(Value)); end;
 
 function IntToHex2(Value: Int32): string; overload;
 begin
@@ -2750,7 +2750,7 @@ begin
 end;
 
 function IntToHex2(Value: Cardinal): string; overload;
-begin Result := FastIntToStr.IntToHex2(Int32(Value)); end;
+begin Result := IntToHex2(Int32(Value)); end;
 
 function IntToHex2(Value: Int64): string; overload;
 begin
@@ -2759,7 +2759,7 @@ begin
 end;
 
 function IntToHex2(Value: UInt64): string; inline; overload;
-begin Result := FastIntToStr.IntToHex2(Int64(Value)); end;
+begin Result := IntToHex2(Int64(Value)); end;
 
 const hexchar : packed array[0..$f] of char='0123456789ABCDEF';
 function IntToHex2(Value: Integer; Digits: Integer): string; overload;
@@ -2835,7 +2835,7 @@ begin
 end;
 
 function IntToHex2(Value: Cardinal; Digits: Integer): string; inline; overload;
-begin Result := FastIntToStr.IntToHex2(Integer(Value),Digits); end;
+begin Result := IntToHex2(Integer(Value),Digits); end;
 
 function IntToHex2(Value: Int64; Digits: Integer): string; overload;
 label char16,char12,char8,char4;
@@ -2961,7 +2961,7 @@ begin
 end;
 
 function IntToHex2(Value: UInt64; Digits: Integer): string; overload;
-begin Result := FastIntToStr.IntToHex2(Int64(Value),Digits); end;
+begin Result := IntToHex2(Int64(Value),Digits); end;
 
 procedure IntToHex2(var P : PWideChar; Value : Int8); overload;
 begin ByteToHex(P,Value); inc(P,2); end;
@@ -3217,9 +3217,9 @@ end;
 function IntToHex2(Value : Pointer): string; inline; overload;
 begin
 {$IFDEF CPU64BITS}
-  Result := FastIntToStr.IntToHex2(Int64(Value));
+  Result := IntToHex2(Int64(Value));
 {$ELSE}
-  Result := FastIntToStr.IntToHex2(Int32(Value));
+  Result := IntToHex2(Int32(Value));
 {$ENDIF}
 end;
 
