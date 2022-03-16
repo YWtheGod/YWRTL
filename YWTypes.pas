@@ -34,7 +34,10 @@ type
   BufferPool16k = TBufferPool<__T3>;
   BufferPool64k = TBufferPool<__T5>;
   BufferPool128k = TBufferPool<__T6>;
+  BufferPool256k = TBufferPool<__T7>;
+  BufferPool512k = TBufferPool<__T8>;
   BufferPool1M = TBufferPool<__T9>;
+  BufferPool2M = TBufferPool<__T10>;
   BufferPool4M = TBufferPool<__T11>;
 
   TRingQueue<T> = record
