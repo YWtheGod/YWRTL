@@ -23,7 +23,7 @@ type
   TBufferPool<T>=record
   const BufferSize = 1 shl (11+sizeof(T));
   class var
-    buf : Pointer;
+    [volatile]buf : Pointer;
   class function GetBuffer : Pointer; static; inline;
   class procedure FreeBuffer(var B : Pointer); static; inline;
   class constructor Create;
@@ -498,14 +498,14 @@ end;
 
 class procedure TBufferPool<T>.FreeBuffer(var B: Pointer);
 begin
-  AtomicExchange(b,buf);
+  b := AtomicExchange(buf,b);
   if b<>nil then Freemem(b);
 end;
 
 class function TBufferPool<T>.GetBuffer: Pointer;
 begin
   Result := nil;
-  AtomicExchange(Result,buf);
+  Result := AtomicExchange(buf,Result);
   if Result=nil then Getmem(Result,buffersize);
 end;
 
