@@ -17,14 +17,7 @@ type
     property OnDestroy : TNotifyEvent read FOnDestroy write SetOnDestroy;
   end;
 
-  procedure Register;
-
 implementation
-
-procedure Register;
-begin
-  RegisterComponents('YWTheGod', [TFrameHelper]);
-end;
 
 { TFrameHelper }
 

@@ -38,15 +38,7 @@ type
     property OnCall : TNotifyEvent read FOnCall write SetOnCall;
   end;
 
-procedure Register;
-
 implementation
-
-procedure Register;
-begin
-  RegisterComponents('YWTheGod', [TEventSender]);
-  RegisterComponents('YWTheGod', [TEventReciever]);
-end;
 
 { TEventSender }
 
