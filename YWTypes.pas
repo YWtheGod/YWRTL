@@ -62,7 +62,7 @@ type
   private
     [volatile]R : Cardinal;
     [volatile]WW : Cardinal;
-    [volatile]W : NativeUInt;
+    [volatile]W : TThreadID;
   public
     const NeedSleep = sizeof(T)<=2;
     class procedure idle; inline; static;
@@ -196,7 +196,7 @@ end;
 
 procedure __RWLock<T>.BeginRead;
 begin
-  if W=TThread.Current.Handle then exit;
+  if W=TThread.Current.ThreadID then exit;
   repeat
     while WW>0 do idle;
     atomicincrement(R);
@@ -208,12 +208,12 @@ end;
 
 procedure __RWLock<T>.BeginWrite;
 begin
-  if W=TThread.Current.Handle then exit;
+  if W=TThread.Current.ThreadID then exit;
   atomicincrement(WW);
   repeat
     while (R>0)or(W<>0) do idle;
     var successed : boolean;
-    atomiccmpexchange(W,TThread.Current.Handle,0,successed);
+    atomiccmpexchange(W,TThread.Current.ThreadID,0,successed);
     if successed then break;
     idle;
   until false;
@@ -221,7 +221,7 @@ end;
 
 procedure __RWLock<T>.DownGradeToRead;
 begin
-  if W<>TThread.Current.Handle then BeginRead
+  if W<>TThread.Current.ThreadID then BeginRead
   else begin
     atomicincrement(R);
     W := 0;
@@ -236,7 +236,7 @@ end;
 
 procedure __RWLock<T>.EndWrite;
 begin
-  if W=TThread.Current.Handle then begin
+  if W=TThread.Current.ThreadID then begin
     W := 0;
     atomicdecrement(WW);
   end;
@@ -265,7 +265,7 @@ begin
   else begin
     atomicincrement(WW);
     while R>1 do idle;
-    W := TThread.Current.Handle;
+    W := TThread.Current.ThreadID;
     atomicdecrement(R);
   end;
 end;
